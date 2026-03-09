@@ -28,7 +28,7 @@ class MotionViewer:
         assert n <= len(self.colors), 'Subjects are more than colors in MotionViewer.'
         assert names is None or n <= len(names), 'Subjects are more than names in MotionViewer.'
         self.n = n
-        self.offsets = [(((n - 1) / 2 - i) * 1.5 if not overlap else 0, 0, 0) for i in range(n)]
+        self.offsets = [(((n - 1) / 2 - i) * 1.7 if not overlap else 0, 0, 0) for i in range(n)]
         self.names = names
         self.conn = None
         self.fps = fps
