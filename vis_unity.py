@@ -63,7 +63,7 @@ def process_easymocap_data(sub_dir, seq_name):
 
 def vis_easymocap():
     data_dir = 'data/processed'
-    sub_name = 'multisys_zhanglb'
+    sub_name = 'hybrid'
     sub_dir = os.path.join(data_dir, sub_name)
     
     seq_names = os.listdir(sub_dir)
@@ -71,29 +71,30 @@ def vis_easymocap():
     idx_list = [i for i in range(0, seq_num)]
     print('len:', len(idx_list))
     
-    for seq_name in seq_names:
+    for i in range(len(seq_names)):
+        seq_name = seq_names[i]
         pose_list, tran_list = [], []
 
         pose, tran = process_easymocap_data(sub_dir, seq_name)
         pose_list.append(pose)
         tran_list.append(tran)
 
-        name_list = ['markerless']
+        name_list = ['Mocap_'+str(i+1)]
 
         viewer_manager = MotionViewerManager(len(pose_list), overlap=False, names=name_list)
 
-        viewer_manager.visualize(pose_list)
+        viewer_manager.visualize(pose_list, tran_list)
         viewer_manager.close()
 
 def vis_easymocap_xingying():
-    data_dir = 'data/aligned_debug'
-    sub_name = 'multisys_zhanglb'
+    data_dir = 'data/aligned'
+    sub_name = 'hybrid'
     sub_dir = os.path.join(data_dir, sub_name)
     seq_names = os.listdir(sub_dir)
     seq_names = sorted(seq_names, key=lambda x: int(x.split('.')[0]))
     print('seq_names:', seq_names)
     
-    for i in range(len(seq_names)):
+    for i in range(0, 1):
         seq_name = seq_names[i]
         print (f'Visualizing sequence {i}/{len(seq_names)}: {seq_name}...')
         
@@ -101,6 +102,7 @@ def vis_easymocap_xingying():
 
         pose_xy, tran_xy = data['pose'][0], data['tran'][0]
         pose_em, tran_em = data['pose_em'][0], data['tran_em'][0]
+        print('tran_em:', tran_em)
         
         # mask ignored joints
         pose_xy[:, joint_set.ignored_vis] = torch.eye(3, device=pose_xy.device)
@@ -111,17 +113,34 @@ def vis_easymocap_xingying():
 
         pose_xy = pose_xy[:min_len]
         tran_xy = tran_xy[:min_len]
+        
+        # remove the first frame offset
+        tran_xy = tran_xy - tran_xy[0:1]
+        tran_em = tran_em - tran_em[0:1]
 
         pose_em = pose_em[:min_len]
         tran_em = tran_em[:min_len]
         
-        pose_list = []
-        pose_list.append(pose_xy)
-        pose_list.append(pose_em)
-        name_list = ['OptiMocap_'+str(i+1), 'EasyMocap']
+        # tran_em xz轴取负
+        tran_em[:, [0, 2]] = -tran_em[:, [0, 2]]
+        tran_em = tran_em * 1000
+
+        # smpl pose replacement
+        pose_xy_g = body_model.forward_kinematics(pose_xy)[0]
+        pose_em_g = body_model.forward_kinematics(pose_em)[0]
+        replace_joints = [3, 6, 1, 2, 4, 5, 7, 8, 10, 11]
+        pose_xy_g[:, replace_joints] = pose_em_g[:, replace_joints]
+        pose_xy = body_model.inverse_kinematics_R(pose_xy_g)
         
-        viewer_manager = MotionViewerManager(len(pose_list), overlap=False, names=name_list)
-        viewer_manager.visualize(pose_list)
+        pose_list, tran_list = [], []
+        pose_list.append(pose_xy)
+        pose_list.append(pose_xy)
+        tran_list.append(tran_xy)
+        tran_list.append(tran_em)
+        name_list = ['OptiMocap', 'EasyMocap']
+        
+        viewer_manager = MotionViewerManager(len(pose_list), overlap=True, names=name_list)
+        viewer_manager.visualize(pose_list, tran_list)
         viewer_manager.close()
         
 if __name__ == '__main__':

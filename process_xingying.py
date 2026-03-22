@@ -27,8 +27,13 @@ def syn_acc(v, smooth_n=2, fps=60):
     return acc
 
 def bvh_trans_downsampled(bvh_path, ly_path, xrs_path, fps_set=60):
-    bvh_smpl_map = [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23],
-                    [0, 3, 6, 9, 13, 16, 18, 20, 14, 17, 19, 21, 12, 15, 1, 4, 7, 10, 2, 5, 8, 11, 22, 23]]
+    # bvh_smpl_map = [[0, 1, 2, 3, 4,  5,  6,  7,  8,  9,  10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23],
+    #                 [0, 3, 6, 9, 13, 16, 18, 20, 14, 17, 19, 21, 12, 15, 1,  4,  7,  10, 2,  5,  8,  11, 22, 23]]
+    
+    # upper body    
+    bvh_smpl_map = [[0, 1, 2, 3,  4,  5,  6,  7,  8,  9,  10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23],
+                    [0, 6, 9, 12, 15, 13, 16, 18, 20, 14, 17, 19, 21, 1,  2,  3,  4,  5,  7,  8,  10, 11, 22, 23]]
+    
     # 提取Frame#和Timestamp列
     frames = []
     timestamps = []
@@ -52,7 +57,8 @@ def bvh_trans_downsampled(bvh_path, ly_path, xrs_path, fps_set=60):
         xrs_lines = file.readlines()
 
     # 文件头占据前32行，调整此值以确保从正确位置开始读取数据
-    data_start_index = 32
+    # data_start_index = 32 # whole body
+    data_start_index = 23 # upper body
 
     # 用于记录第0帧的hips的x和z坐标值，初始化为None
     hips_0_x = None
@@ -83,7 +89,7 @@ def bvh_trans_downsampled(bvh_path, ly_path, xrs_path, fps_set=60):
                 hips['x'].append(adjusted_hips_x)
                 hips['y'].append(adjusted_hips_y)
                 hips['z'].append(adjusted_hips_z)
-
+    
     with open(bvh_path, 'r') as file:
         bvh_data = file.readlines()
 
@@ -107,31 +113,24 @@ def bvh_trans_downsampled(bvh_path, ly_path, xrs_path, fps_set=60):
     # 提取角度数据
     motion_lines = motion_data[3:]  # 跳过"Frames:", "Frame Time:"行和空行
     channels_data = []
+    
     for line in motion_lines:
         channels = list(map(float, line.split()))
+        # * upper body: len(channels) == 78; whole body: len(channels) == 132
         channels_data.append(channels)
-    sublist = []
-    angle_data = [[sublist[i:i + 3] for i in range(3, 132, 6)] for sublist in channels_data]
-
-    pose_bvh = torch.tensor(np.array(angle_data, dtype='float')).reshape(-1, 22, 3)
+    
+    # # whole body
+    # angle_data = [[sublist[i:i + 3] for i in range(3, 132, 6)] for sublist in channels_data]
+    # pose_bvh = torch.tensor(np.array(angle_data, dtype='float')).reshape(-1, 22, 3)
+    
+    # upper body
+    # init pose_bvh with zeros, and then fill the upper body joints with the corresponding angle data
+    pose_bvh = torch.zeros(size=[len(channels_data), 22, 3])
+    angle_data = [[sublist[i:i + 3] for i in range(3, 78, 6)] for sublist in channels_data]
+    pose_bvh[:, :13, :] = torch.tensor(np.array(angle_data, dtype='float')).reshape(-1, 13, 3)  
+    
     zeros = torch.zeros(pose_bvh.size(0), 2, 3)
     pose_bvh = torch.cat((pose_bvh, zeros), dim=1).reshape(-1, 24, 3) * np.pi / 180
-    
-    # change: do not use z correction
-    # rotation_correction = np.array([np.pi, np.pi, 0])  # 绕Y轴旋转180度
-    # # 对每个关节的每个帧应用旋转修正
-    # for i in range(pose_bvh.shape[0]):  # 遍历每一帧
-    #     for j in range(0, 1):  # 遍历每个关节
-    #         # 转换为旋转矩阵
-    #         joint_rot = Rotation.from_euler('ZXY', pose_bvh[i, j].cpu().numpy())
-    #         correction_rot = Rotation.from_euler('ZXY', rotation_correction)
-            
-    #         # 应用修正旋转（注意：这里使用了全局旋转修正）
-    #         corrected_rot = correction_rot * joint_rot
-            
-    #         # 转回欧拉角
-    #         corrected_euler = corrected_rot.as_euler('ZXY')
-    #         pose_bvh[i, j] = torch.tensor(corrected_euler, dtype=pose_bvh.dtype, device=pose_bvh.device)
 
     pose_smpl = torch.zeros(size=[pose_bvh.shape[0], 24, 3])
     pose_smpl[:, bvh_smpl_map[1]] += pose_bvh[:, bvh_smpl_map[0]]
@@ -141,6 +140,7 @@ def bvh_trans_downsampled(bvh_path, ly_path, xrs_path, fps_set=60):
     timestamps_bvh = [timestamps[0] + i * frame_time for i in range(frames[-1])]
     original_time_stamps = timestamps_bvh
     original_frame_numbers = list(range(len(original_time_stamps)))
+    
     original_angles = rotation_matrix_to_r6d(pose_bvh_matrix).reshape(len(angle_data), -1)
     original_angles = original_angles.reshape(original_angles.shape[0], -1)
     # 计算原始帧率为 90fps 时，每个数据点的时间间隔
@@ -191,7 +191,6 @@ def bvh_trans_downsampled(bvh_path, ly_path, xrs_path, fps_set=60):
 def bvh_2_smpl_pose_down_sampled(bvh_path, ly_path, xrs_path, fps_set=30, tposeframe=1000):
     body_model_light = SMPLight()
     joint_num = 0
-    sublist = []
     joint_num = 22
     print(f'joint num: {joint_num}')
     # pose_bvh_matrix = bvh_downsampled(bvh_path=bvh_path, ly_path=ly_path,fps_set=fps_set)
@@ -402,8 +401,9 @@ if __name__ == "__main__":
     data_dir = './data'
     em_dir = os.path.join(data_dir, 'processed')
     xy_dir = os.path.join(data_dir, 'xingying')
-    output_dir = os.path.join(data_dir, 'aligned_debug')
-    sub_name = 'multisys_zhanglb'
+    output_dir = os.path.join(data_dir, 'aligned')
+    sub_name = 'hybrid'
+    sub_name_xy = 'hyq'
     
     sub_dir_output = os.path.join(output_dir, sub_name)
     os.makedirs(sub_dir_output, exist_ok=True)
@@ -417,11 +417,11 @@ if __name__ == "__main__":
     print('len:', len(seq_names_em))
     body_model = art.ParametricModel(paths.smpl_file)
     
-    for i in range(0, 1):
+    for i in range(0, len(seq_names_em)):
         print(f'Processing sequence {i+1}/{seq_num}...')
         
         # load xingying smpl data
-        seq_name_xy = 'zlb' + str(i+1)
+        seq_name_xy = sub_name_xy + str(i+1)
         seq_dir_xy = os.path.join(sub_dir_xy, seq_name_xy)
         save_path = seq_dir_xy
         
@@ -455,13 +455,14 @@ if __name__ == "__main__":
             smpl_pose = smpl_pose[:frame_threshold]
         if smpl_tran.shape[0] > frame_threshold:
             smpl_tran = smpl_tran[:frame_threshold]
-
+        
+        # region: time alignment
         left_hand_syn_acc_scale_xy = load_data(body_model, smpl_pose)
         left_hand_syn_acc_scale_em = load_data(body_model, smpl_pose_em)
-
         smpl_pose, smpl_tran, smpl_pose_em, smpl_tran_em, frame_bias = time_align(ref_signal_1=left_hand_syn_acc_scale_xy,
                                                                          ref_signal_2=left_hand_syn_acc_scale_em,
                                                                          seq_1=smpl_pose, seq_2=smpl_tran, 
                                                                          seq_3=smpl_pose_em, seq_4=smpl_tran_em)
+        # endregion
         
         save_data(sub_dir_output, smpl_pose, smpl_tran, smpl_pose_em, smpl_tran_em, save_name=str(i+1)+'.pt')

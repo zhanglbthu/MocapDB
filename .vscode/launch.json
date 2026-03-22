@@ -1,0 +1,12 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "process_xingying.py",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/process_xingying.py",  // 假设文件在工作区文件夹内
+            "justMyCode": false  // 仅调试你的代码，不包括库代码
+        }
+    ]
+}
