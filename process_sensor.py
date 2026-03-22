@@ -109,9 +109,10 @@ def align(data_dir, time_offsets):
 
     subject = os.path.basename(data_dir)
     save_dir = os.path.join("data/raw/sensor", subject)
+    os.makedirs(save_dir, exist_ok=True)
     
     # 定义需要对齐的键列表
-    keys_to_align = ['acc', 'raw_acc', 'ori', 'gyro', 'mag', 'pressure', 'ppg']
+    keys_to_align = ['acc', 'raw_acc', 'ori', 'gyro', 'mag', 'pressure', 'ppg', 'pose']
     
     # 遍历所有文件
     for pt_file in pt_files:
@@ -153,6 +154,9 @@ def align(data_dir, time_offsets):
         # 截取数据：去除不连贯的帧
         for key in keys_to_align:
             aligned_data[key] = aligned_data[key][remove_start_frames:num_frames-remove_end_frames]
+        
+        # print data[acc] length and aligend data[acc] length
+        print("acc comparison:", data['acc'].shape[0], aligned_data['acc'].shape[0])
         
         # 保存对齐后的数据，按原文件名保存
         aligned_data_path = os.path.join(save_dir, pt_file)

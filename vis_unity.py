@@ -61,6 +61,50 @@ def process_easymocap_data(sub_dir, seq_name):
     print('pose shape:', pose.shape, 'tran shape:', tran.shape)
     return pose, tran
 
+def process_data(sub_dir, seq_name):
+    data_path = os.path.join(sub_dir, seq_name)
+    data = torch.load(data_path)
+    
+    pose = data['pose']
+    pose_gt = data['pose_gt']
+    pose_gt_new = data['pose_gt_new']
+    
+    return pose_gt_new, pose_gt, pose
+
+def get_sorted_files(data_dir):
+    # 获取所有以.pt结尾的文件
+    pt_files = [f for f in os.listdir(data_dir) if f.endswith('.pt')]
+    
+    # 按照文件名前的数字部分排序
+    pt_files.sort(key=lambda f: int(f.split('.')[0]))  # 通过文件名前的数字进行排序
+    
+    return pt_files
+
+def vis_data():
+    data_dir = 'data/processed'
+    sub_name = 'hyq_0320'
+    sub_dir = os.path.join(data_dir, sub_name)
+    
+    seq_names = get_sorted_files(sub_dir)
+    idx_list = [i for i in range(0, 1)]
+    print('len:', len(idx_list))
+    
+    for i in idx_list:
+        seq_name = seq_names[i]
+        pose_list, tran_list = [], []
+
+        pose_gt_new, pose_gt, pose = process_data(sub_dir, seq_name)
+        pose_list.append(pose_gt_new.cpu())
+        pose_list.append(pose_gt.cpu())
+        pose_list.append(pose.cpu())
+
+        name_list = ['gt_new_'+str(i+1), 'gt', 'mocap']
+
+        viewer_manager = MotionViewerManager(len(pose_list), overlap=False, names=name_list)
+
+        viewer_manager.visualize(pose_list, tran_list)
+        viewer_manager.close()
+
 def vis_easymocap():
     data_dir = 'data/processed'
     sub_name = 'hybrid'
@@ -87,8 +131,8 @@ def vis_easymocap():
         viewer_manager.close()
 
 def vis_easymocap_xingying():
-    data_dir = 'data/aligned'
-    sub_name = 'hybrid'
+    data_dir = 'data/processed'
+    sub_name = 'hyq_0320'
     sub_dir = os.path.join(data_dir, sub_name)
     seq_names = os.listdir(sub_dir)
     seq_names = sorted(seq_names, key=lambda x: int(x.split('.')[0]))
@@ -144,4 +188,4 @@ def vis_easymocap_xingying():
         viewer_manager.close()
         
 if __name__ == '__main__':
-    vis_easymocap_xingying()
+    vis_data()

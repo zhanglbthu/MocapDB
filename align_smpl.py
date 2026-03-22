@@ -121,18 +121,19 @@ def save_data(save_path, smpl_pose, smpl_tran, sensor_data_path, save_name='test
     
     num_frames = smpl_pose.shape[0]
     
-    keys_to_align = ['acc', 'raw_acc', 'ori', 'gyro', 'mag', 'pressure', 'ppg']
+    keys_to_align = ['acc', 'raw_acc', 'ori', 'gyro', 'mag', 'pressure', 'ppg', 'pose']
     data = torch.load(sensor_data_path)
     
     aligned_data = {}
+    print(data.keys())
     for key in data.keys():
         if key in keys_to_align:
             # align
-            aligned_data[key] = data[key][frame_bias:]
+            aligned_data[key] = data[key][frame_bias:].clone()
             # crop
-            aligned_data[key] = aligned_data[key][:num_frames]
+            aligned_data[key] = aligned_data[key][:num_frames].clone()
         else:
-            aligned_data[key] = data[key]
+            aligned_data[key] = data[key].clone()
     
     # 新增pose_gt和tran_gt
     pose_gt = smpl_pose.clone()
@@ -140,6 +141,7 @@ def save_data(save_path, smpl_pose, smpl_tran, sensor_data_path, save_name='test
     
     aligned_data['pose_gt'] = pose_gt
     aligned_data['tran_gt'] = tran_gt
+    aligned_data['frame_bias'] = frame_bias
     
     # print shape
     print(f'aligned_data keys: {aligned_data.keys()}')

@@ -303,17 +303,9 @@ def latency_estimate(seq_1, seq_2, threadhold=20000):
 
     return time_offset
 
-def time_align(ref_signal_1, ref_signal_2, seq_1, seq_2, seq_3, seq_4):
-    '''
-    seq_1: pose
-    seq_2: tran
-    seq_3: pose_em
-    seq_4: tran_em
-    '''
+def time_align(ref_signal_1, ref_signal_2):
 
-    # 时间偏移量估计
-    frame_bias = latency_estimate(ref_signal_1, ref_signal_2)  ### signal2 is real
-    # frame_bias = 0
+    frame_bias = 0
     # 手动对齐
     plt.ioff()
     print('开始初始时间对齐')
@@ -321,12 +313,12 @@ def time_align(ref_signal_1, ref_signal_2, seq_1, seq_2, seq_3, seq_4):
     while True:
         print(f"当前传感器信号延迟量:{frame_bias}")
         if frame_bias < 0:
-            plt.plot(ref_signal_1, label='mocap')
-            plt.plot(ref_signal_2[-frame_bias:], label='sensor')
+            plt.plot(ref_signal_1, label='xingying')
+            plt.plot(ref_signal_2[-frame_bias:], label='easymocap')
             plt.ylim(0, 50)
         else:
-            plt.plot(ref_signal_1[frame_bias:], label='mocap')
-            plt.plot(ref_signal_2, label='sensor')
+            plt.plot(ref_signal_1[frame_bias:], label='xingying')
+            plt.plot(ref_signal_2, label='easymocap')
             plt.ylim(0, 50)
         plt.legend()
         plt.show()
@@ -336,21 +328,8 @@ def time_align(ref_signal_1, ref_signal_2, seq_1, seq_2, seq_3, seq_4):
         elif c.find('-') > -1:
             frame_bias -= int(c[1:])
         elif c.find('ok') > -1:
-            if frame_bias < 0:
-                seq_3 = seq_3[-frame_bias:]
-                seq_4 = seq_4[-frame_bias:]
-                ref_signal_2 = ref_signal_2[-frame_bias:]
-            else:
-                seq_1 = seq_1[frame_bias:]
-                seq_2 = seq_2[frame_bias:]
-                ref_signal_1 = ref_signal_1[frame_bias:]
             break
-        
-    # 前后截取以同步帧数
-    pre_len, suf_len = 0, 0
-    
-
-    return seq_1, seq_2, seq_3, seq_4, frame_bias
+    return frame_bias
 
 def read_imu_(imu_path):
     data = torch.load(imu_path)
@@ -400,10 +379,10 @@ if __name__ == "__main__":
     '''
     data_dir = './data'
     em_dir = os.path.join(data_dir, 'processed')
-    xy_dir = os.path.join(data_dir, 'xingying')
-    output_dir = os.path.join(data_dir, 'aligned')
-    sub_name = 'hybrid'
-    sub_name_xy = 'hyq'
+    xy_dir = os.path.join(data_dir, 'raw', 'xingying')
+    output_dir = os.path.join(data_dir, 'processed')
+    sub_name = 'hyq_0320'
+    sub_name_xy = 'hyq0320'
     
     sub_dir_output = os.path.join(output_dir, sub_name)
     os.makedirs(sub_dir_output, exist_ok=True)
@@ -413,7 +392,6 @@ if __name__ == "__main__":
     seq_names_em = os.listdir(sub_dir_em)
     seq_num = len(seq_names_em)
     
-    # actions = ['ArmRaising', 'Swing', 'Picking', 'LegLifting', 'Sitting', 'Jumping', 'Walking', 'Running', 'Steps', 'Climbing', 'Bending']
     print('len:', len(seq_names_em))
     body_model = art.ParametricModel(paths.smpl_file)
     
@@ -424,45 +402,36 @@ if __name__ == "__main__":
         seq_name_xy = sub_name_xy + str(i+1)
         seq_dir_xy = os.path.join(sub_dir_xy, seq_name_xy)
         save_path = seq_dir_xy
-        
         tpose_frame = 1
-        fps_set = 60
+        fps_set = 30
         manual_gt_tpose_frame = int(tpose_frame * (3 / 9))
-        
         smpl_pose, smpl_tran = read_gt(save_path, manual_gt_tpose_frame, fps_set)
         
-        # load easymocap smpl data
-        seq_name_em = seq_names_em[i]
-        seq_dir_em = os.path.join(sub_dir_em, seq_name_em)
-        smpl_dir = os.path.join(seq_dir_em, 'smpl')
-        seq_idx = seq_name_em.split('_')[-1]
-        pose_name = 'smpl_pose_' + seq_idx + '.pt'
-        tran_name = 'smpl_tran_' + seq_idx + '.pt'
+        seq_name_em = str(i+1) + ".pt"
+        data = torch.load(os.path.join(sub_dir_em, seq_name_em))
         
-        pose_path = os.path.join(smpl_dir, pose_name)
-        tran_path = os.path.join(smpl_dir, tran_name)
-        
-        smpl_pose_em = torch.load(pose_path)
-        smpl_tran_em = torch.load(tran_path)
-        # # find the file with .pt extension
-        # imu_files = [f for f in os.listdir(imu_path) if f.endswith('.pt') and not f.startswith('test')]
-
-        # aM, RMB, pressure = read_imu_(os.path.join(imu_path, imu_files[0]))
-
-        # 尾部切割
-        frame_threshold = 50000
-        if smpl_pose.shape[0] > frame_threshold:
-            smpl_pose = smpl_pose[:frame_threshold]
-        if smpl_tran.shape[0] > frame_threshold:
-            smpl_tran = smpl_tran[:frame_threshold]
+        smpl_pose_em = data['pose_gt']
+        smpl_tran_em = data['tran_gt']
         
         # region: time alignment
         left_hand_syn_acc_scale_xy = load_data(body_model, smpl_pose)
         left_hand_syn_acc_scale_em = load_data(body_model, smpl_pose_em)
-        smpl_pose, smpl_tran, smpl_pose_em, smpl_tran_em, frame_bias = time_align(ref_signal_1=left_hand_syn_acc_scale_xy,
-                                                                         ref_signal_2=left_hand_syn_acc_scale_em,
-                                                                         seq_1=smpl_pose, seq_2=smpl_tran, 
-                                                                         seq_3=smpl_pose_em, seq_4=smpl_tran_em)
+        frame_bias = time_align(ref_signal_1=left_hand_syn_acc_scale_xy, ref_signal_2=left_hand_syn_acc_scale_em)
         # endregion
         
-        save_data(sub_dir_output, smpl_pose, smpl_tran, smpl_pose_em, smpl_tran_em, save_name=str(i+1)+'.pt')
+        smpl_pose = smpl_pose[frame_bias:]
+        smpl_pose = smpl_pose[:len(smpl_pose_em)]
+        
+        # replace arms with smpl pose data
+        pose_em = body_model.forward_kinematics(smpl_pose_em)[0]
+        pose_xy = body_model.forward_kinematics(smpl_pose)[0]
+        
+        replace_joints = [13, 14, 16, 17, 18, 19, 20, 21]
+        pose_em[:, replace_joints] = pose_xy[:, replace_joints]
+        pose_local = body_model.inverse_kinematics_R(pose_em)
+        
+        data['pose_gt_new'] = pose_local
+        
+        torch.save(data, os.path.join(sub_dir_em, seq_name_em))
+        
+        print(f'data keys after refinement: {data.keys()}')
