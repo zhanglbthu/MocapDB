@@ -172,15 +172,3 @@ if __name__ == "__main__":
     # align sensor data using sensor.time_offsets and save the results
     align(data_dir, sensor.time_offsets)
     
-    file_index = 0  # 选择要分析的文件索引
-    start_frame = 1000  # 设置起始帧
-    end_frame = 1500   # 设置结束帧
-    devices_to_plot = [0, 2]  # 需要可视化的设备序号列表（例如设备1, 设备3, 设备5）
-
-    plot_acc(data_dir, 
-             file_index=file_index, 
-             start_frame=start_frame, 
-             end_frame=end_frame, 
-             devices_to_plot=devices_to_plot)
-    
-    
