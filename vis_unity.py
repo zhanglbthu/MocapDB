@@ -86,7 +86,7 @@ def vis_data():
     sub_dir = os.path.join(data_dir, sub_name)
     
     seq_names = get_sorted_files(sub_dir)
-    idx_list = [i for i in range(0, 1)]
+    idx_list = [i for i in range(10, 15)]
     print('len:', len(idx_list))
     
     for i in idx_list:

@@ -145,8 +145,6 @@ def save_data(save_path, smpl_pose, smpl_tran, sensor_data_path, save_name='test
     
     # print shape
     print(f'aligned_data keys: {aligned_data.keys()}')
-    for key in aligned_data.keys():
-        print(f'{key} shape: {aligned_data[key].shape}')
     
     torch.save(aligned_data, os.path.join(save_path, save_name))
 
@@ -168,7 +166,7 @@ if __name__ == "__main__":
     print('len:', len(seq_names))
     body_model = art.ParametricModel(paths.smpl_file)
     
-    for i in range(0, 1):
+    for i in range(2, len(seq_names)):
         print(f'Processing sequence {i+1}/{seq_num}...')
         
         # load sensor data

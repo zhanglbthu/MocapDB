@@ -290,7 +290,7 @@ class sensor:
     # the rest 6 devices to idx 0 offset
     time_offsets = [0, 0, 4, 4, 0, 4, 4]
 
-    
+        
 class Devices(Enum):
     """Device IDs."""
     Left_Phone = auto()

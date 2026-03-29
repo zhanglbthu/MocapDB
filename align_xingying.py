@@ -395,7 +395,9 @@ if __name__ == "__main__":
     print('len:', len(seq_names_em))
     body_model = art.ParametricModel(paths.smpl_file)
     
-    for i in range(0, len(seq_names_em)):
+    keys_to_align = ['acc', 'raw_acc', 'ori', 'gyro', 'mag', 'pressure', 'ppg', 'pose', 'pose_gt']
+    
+    for i in range(10, len(seq_names_em)):
         print(f'Processing sequence {i+1}/{seq_num}...')
         
         # load xingying smpl data
@@ -420,7 +422,15 @@ if __name__ == "__main__":
         # endregion
         
         smpl_pose = smpl_pose[frame_bias:]
-        smpl_pose = smpl_pose[:len(smpl_pose_em)]
+        
+        if len(smpl_pose_em) < len(smpl_pose):
+            smpl_pose = smpl_pose[:len(smpl_pose_em)]
+        else:
+            smpl_pose_em = smpl_pose_em[:len(smpl_pose)]
+            print('warning: smpl_pose_em is shorter than smpl_pose, check the alignment result!')
+            for key in data.keys():
+                if key in keys_to_align:
+                    data[key] = data[key][:len(smpl_pose)]
         
         # replace arms with smpl pose data
         pose_em = body_model.forward_kinematics(smpl_pose_em)[0]
