@@ -290,6 +290,13 @@ class sensor:
     # the rest 6 devices to idx 0 offset
     time_offsets = [0, 0, 4, 4, 0, 4, 4]
 
+    # 每个设备需要保存的keys
+    keys_in_device = {'Headset':  ['acc_headsetL', 'gyro_headsetL', 'quaternion_left'],
+                      'Phone':    ['acc', 'gyro', 'linear_acc', 'magnetic', 'rotation'],
+                      'Watch':    ['acc', 'gyro', 'line_acc', 'mag', 'ppg', 'quaternion'],
+                      'STag_C63': ['acc', 'gyro', 'quaternion'],
+                      'STag_D4D': ['acc', 'gyro', 'quaternion']}
+
         
 class Devices(Enum):
     """Device IDs."""
