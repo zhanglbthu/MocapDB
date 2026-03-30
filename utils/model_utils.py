@@ -1,51 +1,27 @@
 import torch
 
 from config import *
-from config import model_config
 
-def load_imuposer_model(model_path: str, combo_id: str):
-    from model.imuposer_local.net import IMUPoserNet
+
+def load_model(model_path: str):
+    """Load MobilePoser model."""
+    from models import MobilePoserNet
     device = model_config.device
-    
-    model = IMUPoserNet(combo_id=combo_id).to(device)
-    model.load_state_dict(torch.load(model_path, map_location=device))
-    
+    try: 
+        model = MobilePoserNet().to(device)
+        model.load_state_dict(torch.load(model_path, map_location=device))
+    except:
+        model = MobilePoserNet.load_from_checkpoint(model_path)
     return model
 
-def load_imuposer_glb_model(model_path: str, combo_id: str):
-    from model.imuposer_glb.net import IMUPoserGlbNet
-    device = model_config.device
-    
-    model = IMUPoserGlbNet(combo_id=combo_id).to(device)
-    model.load_state_dict(torch.load(model_path, map_location=device))
-    
-    return model
-
-def load_mobileposer_model(model_path: str, combo_id: str):
-    from model.mobileposer.net import MobilePoserNet
-    device = model_config.device
-    
-    model = MobilePoserNet(combo_id=combo_id).to(device)
-    model.load_state_dict(torch.load(model_path, map_location=device))
-    
-    return model
-
-def load_heightposer_model(model_path: str, combo_id: str):
-    from model.heightposer.net import HeightPoserNet
-    device = model_config.device
-    
-    model = HeightPoserNet(combo_id=combo_id).to(device)
-    model.load_state_dict(torch.load(model_path, map_location=device))
-    
-    return model
 
 def reduced_pose_to_full(reduced_pose):
     """Transform reduced pose to full pose."""
     B, S = reduced_pose.shape[0], reduced_pose.shape[1]
-    reduced_pose = reduced_pose.view(B, S, 16, 3, 3)
-    full_pose = torch.eye(3, device=reduced_pose.device).repeat(B, S, 24, 1, 1) # [B, S, 24, 3, 3]
+    reduced_pose = reduced_pose.view(B, S, joint_set.n_reduced, 3, 3)
+    full_pose = torch.eye(3, device=reduced_pose.device).repeat(B, S, 24, 1, 1)
     full_pose[:, :, joint_set.reduced] = reduced_pose
-    full_pose = full_pose.view(B, S, -1) # [B, S, 216]
+    full_pose = full_pose.view(B, S, -1)
     return full_pose
 
 

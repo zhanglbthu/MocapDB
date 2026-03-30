@@ -220,89 +220,6 @@ def bvh_2_smpl_pose_down_sampled(bvh_path, ly_path, xrs_path, fps_set=30, tposef
 
     return pose_smpl, tran_smpl_tensor
 
-def time_align_dynamic(ref_signal_1, ref_signal_2, seq_1, seq_2,judge_if_del_rate=1.01, cal_cc_window_len=120, plot_result=True,judge_del_per_frame=10):
-    print('before delete, seq_1:', len(seq_1), 'mocap:',len(seq_2))
-    index = 0
-    # while False:
-    while index+cal_cc_window_len < len(ref_signal_2) and index+cal_cc_window_len < len(ref_signal_1):
-        # del_syn = True
-        # del_imu = True
-
-        cc = torch.corrcoef(
-            torch.cat([ref_signal_2[index:index + cal_cc_window_len], ref_signal_1[index:index + cal_cc_window_len]],
-                      dim=0).reshape(2, -1))[0, 1]
-
-        del_seq_1 = True
-        del_seq_2 = True
-
-        while del_seq_2:
-            del_seq_2_cc = torch.corrcoef(torch.cat([ref_signal_2[index + 1:index + 1 + cal_cc_window_len],
-                                                   ref_signal_1[index:index + cal_cc_window_len]], dim=0).reshape(2,-1))[0, 1]
-            if (cc > 0 and del_seq_2_cc > cc * judge_if_del_rate) or (cc < 0 and del_seq_2_cc > cc / judge_if_del_rate):
-                cc = del_seq_2_cc
-                del_seq_1 = False
-                ref_signal_2=ref_signal_2[torch.arange(ref_signal_2.size(0)) != index]
-                seq_2=seq_2[torch.arange(seq_2.size(0)) != index]
-                # print('del imu at', index)
-            else:
-                del_seq_2 = False
-        while del_seq_1:
-            del_seq_1_cc = torch.corrcoef(
-            torch.cat([ref_signal_2[index:index + cal_cc_window_len], ref_signal_1[index+1:index+1 + cal_cc_window_len]],
-                      dim=0).reshape(2, -1))[0, 1]
-            if (cc > 0 and del_seq_1_cc > cc * judge_if_del_rate) or (cc < 0 and del_seq_1_cc > cc / judge_if_del_rate):
-                cc = del_seq_1_cc
-                ref_signal_1=ref_signal_1[torch.arange(ref_signal_1.size(0)) != index]
-                seq_1=seq_1[torch.arange(seq_1.size(0)) != index]
-                del_seq_2 = False
-                # print('del pose at', index)
-            else:
-                del_seq_1 = False
-        index += judge_del_per_frame
-        if cc < 0:
-            print('woc')
-    print('after delete, seq_1:', len(seq_1), ',mocap:',len(seq_2))
-    if plot_result:
-        plt.ioff()
-        plt.plot(ref_signal_1, label='seq_1')
-        plt.plot(ref_signal_2, label='seq_2')
-        plt.legend()
-        plt.show()
-
-
-    data_len = min(len(seq_1), len(seq_2))
-    seq_1 = seq_1[:data_len]
-    seq_2 = seq_2[:data_len]
-
-    print('\n时间对齐完成!')
-
-    return seq_1, seq_2
-
-def latency_estimate(seq_1, seq_2, threadhold=20000):
-    """
-    算seq2比seq1延迟了多少
-    """
-
-    seq_1 = np.array(seq_1).reshape(-1)[:threadhold]
-    seq_2 = np.array(seq_2).reshape(-1)[:threadhold]
-
-    # 计算互相关
-    correlation = np.correlate(seq_1, seq_2, 'full')
-
-    # 找到互相关的峰值
-    peak_index_mean = 0
-    for _ in range(2):
-        peak_index = np.argmax(correlation)
-        # print(peak_index)
-        correlation[peak_index] = 0
-        peak_index_mean += peak_index
-    peak_index_mean = peak_index_mean // 2
-
-    # 计算时间偏移量
-    time_offset = peak_index_mean - (len(seq_1) - 1)
-
-    return time_offset
-
 def time_align(ref_signal_1, ref_signal_2):
 
     frame_bias = 0
@@ -331,12 +248,6 @@ def time_align(ref_signal_1, ref_signal_2):
             break
     return frame_bias
 
-def read_imu_(imu_path):
-    data = torch.load(imu_path)
-    print(f'imu data loaded from {imu_path}, data keys: {data.keys()}')
-    aM, RMB, pressure = data['acc'], data['ori'], data['pressure']
-    return aM, RMB, pressure
-
 def read_gt(save_path, manual_gt_tpose_frame, fps_set):
     # 找到以.bvh和.xrs为后缀的唯一文件
     bvh_files = [f for f in os.listdir(save_path) if f.endswith('.bvh')]
@@ -358,19 +269,12 @@ def load_data(body_model, smpl_pose, fps=60):
     _, joint = body_model.forward_kinematics(smpl_pose, shape, tran, calc_mesh=False)
     left_hand_pos, right_hand_pos = joint[:, [20]], joint[:, [21]]
 
-    left_hand_syn_acc = syn_acc(v=left_hand_pos)
+    left_hand_syn_acc = syn_acc(v=left_hand_pos, fps=fps)
 
     # 右手加速度作为校准参考信号
     left_hand_syn_acc_scale = torch.norm(left_hand_syn_acc, p=2, dim=-1)
 
     return left_hand_syn_acc_scale
-
-def save_data(save_path, smpl_pose, smpl_tran, smpl_pose_em, smpl_tran_em, save_name='test.pt'):
-    print('saving data...')
-    print(f'smpl_pose shape: {smpl_pose.shape}, smpl_tran shape: {smpl_tran.shape}, smpl_pose_em shape: {smpl_pose_em.shape}, smpl_tran_em shape: {smpl_tran_em.shape}')
-    torch.save(
-        {'pose': [smpl_pose.cpu()], 'tran': [smpl_tran / 1000], 'pose_em': [smpl_pose_em.cpu()], 'tran_em': [smpl_tran_em / 1000]},
-        os.path.join(save_path, save_name))
 
 if __name__ == "__main__":
     '''
@@ -381,8 +285,8 @@ if __name__ == "__main__":
     em_dir = os.path.join(data_dir, 'processed')
     xy_dir = os.path.join(data_dir, 'raw', 'xingying')
     output_dir = os.path.join(data_dir, 'processed')
-    sub_name = 'hyq_0320'
-    sub_name_xy = 'hyq0320'
+    sub_name = 'hyq_0327'
+    sub_name_xy = 'hyq0327'
     
     sub_dir_output = os.path.join(output_dir, sub_name)
     os.makedirs(sub_dir_output, exist_ok=True)
@@ -395,9 +299,9 @@ if __name__ == "__main__":
     print('len:', len(seq_names_em))
     body_model = art.ParametricModel(paths.smpl_file)
     
-    keys_to_align = ['acc', 'raw_acc', 'ori', 'gyro', 'mag', 'pressure', 'ppg', 'pose', 'pose_gt']
+    keys_to_align = ['aM', 'RMB', 'acc', 'gyro', 'mag', 'quaternion', 'linear_acc', 'ppg', 'pose_gt', 'tran_gt']
     
-    for i in range(10, len(seq_names_em)):
+    for i in range(0, len(seq_names_em)):
         print(f'Processing sequence {i+1}/{seq_num}...')
         
         # load xingying smpl data
@@ -416,8 +320,8 @@ if __name__ == "__main__":
         smpl_tran_em = data['tran_gt']
         
         # region: time alignment
-        left_hand_syn_acc_scale_xy = load_data(body_model, smpl_pose)
-        left_hand_syn_acc_scale_em = load_data(body_model, smpl_pose_em)
+        left_hand_syn_acc_scale_xy = load_data(body_model, smpl_pose, fps=fps_set)
+        left_hand_syn_acc_scale_em = load_data(body_model, smpl_pose_em, fps=fps_set)
         frame_bias = time_align(ref_signal_1=left_hand_syn_acc_scale_xy, ref_signal_2=left_hand_syn_acc_scale_em)
         # endregion
         

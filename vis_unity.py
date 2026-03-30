@@ -24,12 +24,12 @@ class MotionViewerManager:
         self.viewer = MotionViewer(sub_num, overlap, names)
         self.viewer.connect()     
 
-    def visualize(self, pose, tran=None):
+    def visualize(self, pose, tran=None, fps=60):
         clock = Clock()
         sub_num = len(pose)
 
         for i in range(len(pose[0])):
-            clock.tick(60)
+            clock.tick(fps)
             self.viewer.clear_line(render=False)
             self.viewer.clear_point(render=False)
             self.viewer.clear_terrian(render=False)
@@ -65,7 +65,7 @@ def process_data(sub_dir, seq_name):
     data_path = os.path.join(sub_dir, seq_name)
     data = torch.load(data_path)
     
-    pose = data['pose']
+    pose = data['pose_pred']
     pose_gt = data['pose_gt']
     pose_gt_new = data['pose_gt_new']
     
@@ -82,11 +82,11 @@ def get_sorted_files(data_dir):
 
 def vis_data():
     data_dir = 'data/processed'
-    sub_name = 'hyq_0320'
+    sub_name = 'hyq_0327'
     sub_dir = os.path.join(data_dir, sub_name)
     
     seq_names = get_sorted_files(sub_dir)
-    idx_list = [i for i in range(10, 15)]
+    idx_list = [i for i in range(0, len(seq_names))]
     print('len:', len(idx_list))
     
     for i in idx_list:
@@ -102,7 +102,7 @@ def vis_data():
 
         viewer_manager = MotionViewerManager(len(pose_list), overlap=False, names=name_list)
 
-        viewer_manager.visualize(pose_list, tran_list)
+        viewer_manager.visualize(pose_list, tran_list, fps=30)
         viewer_manager.close()
 
 def vis_easymocap():

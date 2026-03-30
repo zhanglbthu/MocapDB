@@ -112,7 +112,7 @@ def load_data(body_model, smpl_pose, fps=60):
 def read_sensor_acc(data_path):
     data = torch.load(data_path)
     print(f'sensor data loaded from {data_path}, data keys: {data.keys()}')
-    aM = data['acc'].cpu()
+    aM = data['aM'].cpu()
     return aM
 
 def save_data(save_path, smpl_pose, smpl_tran, sensor_data_path, save_name='test.pt', frame_bias=0):
@@ -121,7 +121,7 @@ def save_data(save_path, smpl_pose, smpl_tran, sensor_data_path, save_name='test
     
     num_frames = smpl_pose.shape[0]
     
-    keys_to_align = ['acc', 'raw_acc', 'ori', 'gyro', 'mag', 'pressure', 'ppg', 'pose']
+    keys_to_align = ['aM', 'RMB', 'acc', 'gyro', 'mag', 'quaternion', 'linear_acc', 'ppg']
     data = torch.load(sensor_data_path)
     
     aligned_data = {}
@@ -155,7 +155,7 @@ if __name__ == "__main__":
     smpl_dir = os.path.join(data_dir, 'smpl')
     sensor_dir = os.path.join(data_dir, 'sensor')
     
-    subject = 'hyq_0320'
+    subject = 'hyq_0327'
     sub_dir_output = os.path.join(output_dir, subject)
     os.makedirs(sub_dir_output, exist_ok=True)
     
@@ -166,11 +166,12 @@ if __name__ == "__main__":
     print('len:', len(seq_names))
     body_model = art.ParametricModel(paths.smpl_file)
     
-    for i in range(2, len(seq_names)):
+    for i in range(0, len(seq_names)):
         print(f'Processing sequence {i+1}/{seq_num}...')
         
         # load sensor data
-        data_path = os.path.join(sensor_dir, subject, str(i+1)+'.pt')
+        data_path = os.path.join(sensor_dir, subject, 'seq' + f'_{i+1:02d}', 'sensor_data.pt')
+        
         acc = read_sensor_acc(data_path)
         
         # load easymocap smpl data

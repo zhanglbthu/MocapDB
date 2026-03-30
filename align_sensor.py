@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 from config import sensor
+import articulate as art
 
 # 可视化加速度模长
 def plot_acc_magnitude(df, seq="seq_01", device="device"):
@@ -70,6 +71,26 @@ def find_csv_by_keywords(folder, keywords):
             return os.path.join(folder, fname)
     return None
 
+def downsample(tensor, original_fps=100, target_fps=30):
+    """
+    使用线性插值将数据从 original_fps 下采样到 target_fps。
+    :param tensor: 输入张量，形状为 (帧数, N)
+    :param original_fps: 原始帧率
+    :param target_fps: 目标帧率
+    :return: 下采样后的张量
+    """
+    # 计算目标帧数
+    original_len = tensor.shape[0]
+    target_len = int(original_len * target_fps / original_fps)
+
+    # 计算目标序号
+    target_indices = np.linspace(0, original_len - 1, target_len)
+    
+    # 直接选取最近邻的帧进行下采样
+    downsampled_tensor = tensor[target_indices.astype(int)]
+
+    return downsampled_tensor
+
 if __name__ == "__main__":
     # data_path
     sensor_dir = "data/raw/sensor"
@@ -79,33 +100,106 @@ if __name__ == "__main__":
     seq_nums = len(os.listdir(sub_dir))
     
     devices = ["Watch_left", "Watch_right", "Phone_left", "Phone_right", "Headset", "STag_left", "STag_right"]
-    # devices = ["Watch_left", "Phone_left", "Headset"]
     
-    for i in range(seq_nums):
+    for i in range(0, seq_nums):
         seq_name = f"seq_{i+1:02d}"
         print(f"Processing {seq_name}...")
         seq_dir = os.path.join(sub_dir, seq_name)
         
-        acc_df_list = []
-        start_index_list = []
+        sensor_data = {}
+        accs, gyros, mags, quats, linear_accs, ppgs = [], [], [], [], [], []
         
-        for device in devices:
+        # 加载calibration矩阵
+        cali_file = [f for f in os.listdir(seq_dir) if f.startswith(f"{i+1}_") and f.endswith(".pt")][0]
+        cali_path = os.path.join(seq_dir, cali_file)
+        
+        cali_data = torch.load(cali_path)
+        RMI, RSB = cali_data['RMI'], cali_data['RSB']
+        
+        for i, device in enumerate(devices):
             device_dir = os.path.join(seq_dir, device)
             
-            # 依次可视化每个设备的加速度模长
-            acc_file = find_csv_by_keywords(device_dir, ["acc"])
-            print(f"  Device: {device}, Acc file: {acc_file}")
-            df = pd.read_csv(acc_file)
-            
-            # plot_acc_magnitude(df, seq=seq_name, device=device)
-            
             # 获取前多少帧的加速度峰值最大值
-            max_acc_index = get_max_acc_index(df, n=3000)
-            start_index_list.append(max_acc_index)
+            acc_file = find_csv_by_keywords(device_dir, ["acc"])
+            acc_df = pd.read_csv(acc_file)
             
-            # 去掉前max_acc_index帧
-            df_aligned = df.iloc[max_acc_index-400:].reset_index(drop=True)
-            acc_df_list.append(df_aligned)
+            # 计算加速度模长并找到峰值最大的位置
+            max_acc_index = get_max_acc_index(acc_df, n=3000)
             
-        # # # plot all the aligned acc magnitude
-        # plot_all_device_acc_magnitudes(acc_df_list, seq_name, devices)
+            keys = sensor.keys_in_device[device.split("_")[0]] # 根据设备类型获取对应的keys
+            for key in keys:
+                csv_file = find_csv_by_keywords(device_dir, [key])
+                data_df = pd.read_csv(csv_file)
+
+                # TODO: 提取对齐后的数据并保存到对应的列表中
+                # 1. align data_df based on max_acc_index
+                data_df = data_df.iloc[max_acc_index+300:].reset_index(drop=True)
+                
+                # 2. save aligned data_df to corresponding list based on key
+                if 'acc' in key.lower() and 'line_acc' not in key.lower() and 'linear_acc' not in key.lower():
+                    # 取后三列作为通道保存，保存为numpy形式
+                    accs.append(data_df.iloc[:, -3:].to_numpy())
+                elif 'gyro' in key.lower():
+                    gyros.append(data_df.iloc[:, -3:].to_numpy())
+                elif 'mag' in key.lower() or 'magnetic' in key.lower():
+                    mags.append(data_df.iloc[:, -3:].to_numpy())
+                elif 'quaternion' in key.lower() or 'rotation' in key.lower():
+                    quats.append(data_df.iloc[:, -4:].to_numpy())
+                elif 'line_acc' in key.lower() or 'linear_acc' in key.lower():
+                    linear_accs.append(data_df.iloc[:, -3:].to_numpy())
+                elif 'ppg' in key.lower():
+                    ppgs.append(data_df.iloc[:, -11:].to_numpy())
+            
+        # 根据accs中序列的长度确定min_len
+        min_len = min([acc.shape[0] for acc in accs])
+        # 对齐所有数据到min_len
+        accs = [acc[:min_len] for acc in accs]
+        gyros = [gyro[:min_len] for gyro in gyros]
+        mags = [mag[:min_len] for mag in mags]
+        quats = [quat[:min_len] for quat in quats]
+        linear_accs = [la[:min_len] for la in linear_accs]
+        ppgs = [ppg[:min_len] for ppg in ppgs]
+        # 将accs从[[N, 3], [N, 3], ...]转换为[N, device_num, 3]
+        accs = torch.from_numpy(np.stack(accs, axis=1)).float()
+        gyros = torch.from_numpy(np.stack(gyros, axis=1)).float()
+        mags = torch.from_numpy(np.stack(mags, axis=1)).float()
+        quats = torch.from_numpy(np.stack(quats, axis=1)).float()
+        linear_accs = torch.from_numpy(np.stack(linear_accs, axis=1)).float()
+        ppgs = torch.from_numpy(np.stack(ppgs, axis=1)).float()
+        
+        # apply calibration matrix
+        aS = accs.clone()
+        quat_IS = quats.clone()
+        RIS = art.math.quaternion_to_rotation_matrix(quat_IS).view(-1, aS.shape[1], 3, 3)
+        
+        aI  = RIS.matmul(aS.unsqueeze(-1)).squeeze(-1) + torch.tensor([0, 0, - 9.8])
+        aM  = RMI.matmul(aI.unsqueeze(-1)).squeeze(-1)
+        RMB = RMI.matmul(RIS).matmul(RSB)
+        print(f"aM shape: {aM.shape}, RMB shape: {RMB.shape}")
+        
+        aM = downsample(aM, original_fps=100, target_fps=30)
+        RMB = downsample(RMB, original_fps=100, target_fps=30)
+        accs = downsample(accs, original_fps=100, target_fps=30)
+        gyros = downsample(gyros, original_fps=100, target_fps=30)
+        mags = downsample(mags, original_fps=100, target_fps=30)
+        quats = downsample(quats, original_fps=100, target_fps=30)
+        linear_accs = downsample(linear_accs, original_fps=100, target_fps=30)
+        ppgs = downsample(ppgs, original_fps=100, target_fps=30)
+        
+        # 确保每个模态的帧数一致
+        assert aM.shape[0] == RMB.shape[0] == accs.shape[0] == gyros.shape[0] == mags.shape[0] == quats.shape[0] == linear_accs.shape[0] == ppgs.shape[0], "帧数不一致！"
+        
+        # 将对齐后的数据保存到sensor_data字典中
+        sensor_data['acc'] = accs
+        sensor_data['gyro'] = gyros
+        sensor_data['mag'] = mags
+        sensor_data['quaternion'] = quats
+        sensor_data['linear_acc'] = linear_accs
+        sensor_data['ppg'] = ppgs
+        
+        sensor_data['aM'] = aM
+        sensor_data['RMB'] = RMB
+        
+        # save sensor_data as .pt file
+        save_path = os.path.join(seq_dir, "sensor_data.pt")
+        torch.save(sensor_data, save_path)
