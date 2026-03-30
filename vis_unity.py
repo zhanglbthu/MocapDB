@@ -95,10 +95,10 @@ def vis_data():
 
         pose_gt_new, pose_gt, pose = process_data(sub_dir, seq_name)
         pose_list.append(pose_gt_new.cpu())
-        pose_list.append(pose_gt.cpu())
+        # pose_list.append(pose_gt.cpu())
         pose_list.append(pose.cpu())
 
-        name_list = ['gt_new_'+str(i+1), 'gt', 'mocap']
+        name_list = ['pose_gt_'+str(i+1), 'pose_pred']
 
         viewer_manager = MotionViewerManager(len(pose_list), overlap=False, names=name_list)
 

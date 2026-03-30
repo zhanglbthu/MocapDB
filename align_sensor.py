@@ -149,7 +149,6 @@ if __name__ == "__main__":
                     linear_accs.append(data_df.iloc[:, -3:].to_numpy())
                 elif 'ppg' in key.lower():
                     ppgs.append(data_df.iloc[:, -11:].to_numpy())
-            
         # 根据accs中序列的长度确定min_len
         min_len = min([acc.shape[0] for acc in accs])
         # 对齐所有数据到min_len

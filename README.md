@@ -61,5 +61,58 @@ Dataset/
 包含每个subject的基本信息和动作类型等元数据
 
 ## 后处理方式
-主要分为多传感器数据对齐和传感器与SMPL数据对齐两部分
+主要分为多传感器数据对齐同步和传感器与SMPL数据对齐两部分
 ### 多传感器数据对齐
+#### 补齐时间戳+拉齐帧率
+由于不同设备的帧率不完全相同，且除了手机以外的其他设备存在多条数据共享一个时间戳的情况，所以首先需要对原始数据进行补齐时间戳和拉齐帧率的处理：
+```bash
+python process_sensor.py
+```
+该脚本会读取`data/raw/sensor_raw/subject/`目录下的原始传感器数据，进行时间戳补齐，并将帧率拉齐到100fps。此时不同设备的数据统一为100fps，且同一设备下的不同模态数据有相同的总帧数，处理后的数据保存在`data/raw/sensor/subject/`目录下
+#### 多设备数据同步
+不同设备的数据传输不完全同步，所以需要对不同设备的数据进行同步操作
+在实际采集过程中，会让参与者在刚开始采集数据后和结束采集数据前分别做一个向上跳起的动作，给每个设备一个在相同时间下的较大加速度，后续可以通过加速度的峰值来对齐不同设备的数据，具体操作如下：
+```bash
+python align_sensor.py
+```
+该脚本会将`data/raw/sensor/subject/`目录下的数据根据前30s的加速度峰值进行时序同步，处理后不同设备具有时序对齐的，相同帧率和总帧数的数据，处理后的数据保存在`data/processed/subject/`目录下
+多设备数据同步示意图如下:
+<div align="center">
+  <img src="assets/sensor_align.png" alt="Image" /> 
+</div>
+
+#### 传感器与SMPL数据对齐
+首先将传感器数据与SMPL数据降采样到相同的帧率（30fps），然后通过左手腕的加速度峰值进行对齐，具体操作如下：
+```bash
+python align_smpl.py
+```
+对齐传感器数据与视频动捕得到的SMPL数据
+```bash
+python align_xingying.py
+```
+对齐传感器数据与光学动捕得到的SMPL数据，并用光学动捕得到的上半身手臂pose refine视频动捕得到的SMPL数据
+这两个过程需要在终端手动输入+-的量来调整对齐的结果，示意图如下：
+<div align="center">
+  <img src="assets/sensor_smpl_align.jpg" alt="Image" /> 
+</div>
+
+对齐后得到最终的数据保存在`data/processed/subject/`目录下
+
+## 对齐结果可视化
+### 环境配置
+目前使用Unity引擎进行SMPL模型的可视化，可以通过[链接](https://cloud.tsinghua.edu.cn/f/c1fded497d7f441793e0/?dl=1)下载打包后的Unity项目
+### 可视化
+可视化前，可以运行
+```bash
+python inference.py
+```
+得到根据传感器数据模型推理的SMPL pose数据，作为与GT数据对比的结果
+
+然后打开Unity项目，点击中间上方的Play让Unity编辑器处于运行状态
+最后运行命令
+```bash
+python vis_unity.py
+```
+即可在Unity中观察到数据集中的GT SMPL结果和当前模型推理的SMPL结果的对比
+
+也可以手动从之前的链接下载视频数据，进行side-by-side的对比
