@@ -285,14 +285,14 @@ if __name__ == "__main__":
     em_dir = os.path.join(data_dir, 'processed')
     xy_dir = os.path.join(data_dir, 'raw', 'xingying')
     output_dir = os.path.join(data_dir, 'processed')
-    sub_name = 'hyq_0327'
-    sub_name_xy = 'hyq0327'
+    sub_name = 'hyq_0402'
+    sub_name_xy = 'hyq0308'
     
     sub_dir_output = os.path.join(output_dir, sub_name)
     os.makedirs(sub_dir_output, exist_ok=True)
     
     sub_dir_em = os.path.join(em_dir, sub_name)
-    sub_dir_xy = os.path.join(xy_dir, sub_name)
+    sub_dir_xy = os.path.join(xy_dir, sub_name_xy)
     seq_names_em = os.listdir(sub_dir_em)
     seq_num = len(seq_names_em)
     
