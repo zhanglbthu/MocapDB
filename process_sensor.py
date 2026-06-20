@@ -113,6 +113,7 @@ def data_timestamp_alignment(data):
 
     current_start = start_time
     resample_index = []
+    stop_index = 0
 
     # 逐个处理每个 100ms 的时间窗口
     while current_start <= end_time:
